@@ -56,14 +56,21 @@ public :
 
   //BRS
   TTree* treeTranslator; //Should make this private
-  Int_t amcID;
+  int amcID;
+  int amcBID;
+  int gebID;
   int vfatID;
+  int infoAMCVEC;
+  int infoGEBVEC;
+  int infoVFATVEC;
+  int Nev;
+
   //int VFATMap[12][12][24];
 
-  AMC13_histogram * m_amc13H;
-  AMC_histogram * m_amcH;
-  GEB_histogram * m_gebH;
-  VFAT_histogram * m_vfatH;
+//  AMC13_histogram * m_amc13H;
+//  AMC_histogram * m_amcH;
+//  GEB_histogram * m_gebH;
+//  VFAT_histogram * m_vfatH;
 
   int m_RunType;
   int m_deltaV;
@@ -119,36 +126,57 @@ void gemTreeTranslator::SlaveBegin(TTree * /*tree*/)
   fFile->cd();
 
 // BRS: Lets make the Tfile here:
+  int numOfAMC=1;
+  int numOfGEB=5;
+  int numOfVFAT=24;
+
+  for (auto a=0; a<numOfAMC; ++a){
+    for (auto g=0; g<numOfGEB; ++g){
+      for (auto v=0; v<numOfVFAT; ++v){
+        auto treeName="gemTree_"+std::to_string(a)+"_"+std::to_string(g)+"_"+std::to_string(v);
+        new TProofOutputFile(treeName, "M");
+        treeTranslator = new TTree(treeName,"Tree holding gem info");
+      }
+    }
+  }
+
+
   treeTranslator = new TTree("gemTree","Tree holding gem info");
-  auto branchAMCID = treeTranslator->Branch("amcID",&amcID,"AMC ID"); //amcID
-  auto branchVfatID = treeTranslator->Branch("vfatID",&vfatID,"VFAT ID"); //vfatID
+//  auto branchinfoAMCVEC = treeTranslator->Branch("infoAMCVEC",&infoAMCVEC,"info AMCVEC/I"); //amcID
+//  auto branchinfoGEBVEC = treeTranslator->Branch("infoGEBVEC",&infoGEBVEC,"info GEBVEC/I");
+//  auto branchinfoVFATVEC = treeTranslator->Branch("infoVFATVEC",&infoVFATVEC,"info VFATVEC/I");
+
+  auto branchAMCID = treeTranslator->Branch("amcID",&amcID,"AMC ID/I"); //amcID
+  auto branchGEBID = treeTranslator->Branch("gebID",&gebID,"GEB ID/I");
+//  auto branchAMCBID = treeTranslator->Branch("amcBID",&amcBID,"AMC BID/I"); //amcBID
+  auto branchVfatID = treeTranslator->Branch("vfatID",&vfatID,"VFAT ID/I"); //vfatID
+
+//  auto branch = treeTranslator->Branch("",&,"/I"); //link
+  auto branchNev = treeTranslator->Branch("Nev",&Nev,"Nev/I"); //Nev
+//  auto branch = treeTranslator->Branch("",&,"/I"); //shelf
+//  auto branch = treeTranslator->Branch("",&,"/I"); //slot
+//  auto branch = treeTranslator->Branch("",&,"/I"); //vfatCH
+//  auto branch = treeTranslator->Branch("",&,"/I"); //vfatID
+//  auto branch = treeTranslator->Branch("",&,"/I"); //vfatN
+//  auto branch = treeTranslator->Branch("",&,"/I"); //latency
+//  auto branch = treeTranslator->Branch("",&,"/I"); //Nhits
+//  auto branch = treeTranslator->Branch("",&,"/I"); //
+
   fFile->Add(treeTranslator);
+
+
+  if (fChain){
+   fChain->GetEntry(0);
+   v_amc13 = GEMEvents->amc13s();
+   std::cout << "SlaveBegin: v_amc13 = "<< v_amc13.size() << std::endl;
+  }
+  else{
+   Error("Begin", "no fChain!");
+  }
 ///// AMCdata::BID() or AMCdata::AMCNum() //AMC ID..
 ///// VFATdata::ChipID() vfatID
 ///// shelf and slot?
 
-// Dont need histograms...
-  TObjString * diramc13 = new TObjString("AMC13-1");
-
-  int iAMCSlots[] = {2,4,6}; //Change slots here
-  std::vector<int> vec_amcSlots(iAMCSlots, iAMCSlots + sizeof(iAMCSlots) / sizeof(int) );
-  for (std::vector<int>::iterator iterAMC=vec_amcSlots.begin(); iterAMC != vec_amcSlots.end(); ++iterAMC){
-    std::string strAMCName = "AMC-";
-    strAMCName.append(to_string((*iterAMC)).c_str());
-    for (int iGEB=0; iGEB<12; iGEB++){
-      std::string strGEBName = "GEB-";
-      strGEBName.append(to_string(iGEB).c_str());
-      for (int iVFAT=0; iVFAT<24; iVFAT++){
-        std::string strVFATName = "VFAT-";
-        strVFATName.append(to_string(iVFAT).c_str());
-        gDirectory->cd("..");   //moves back to previous directory
-      }
-      gDirectory->cd("..");     //moves back to previous directory
-    }
-    gDirectory->cd("..");       //moves back to previous directory
-  }
-
-  gDirectory = savedir;
   if (DEBUG) std::cout << "SLAVE END"<< std::endl;
 }
 
@@ -159,55 +187,58 @@ Bool_t gemTreeTranslator::Process(Long64_t entry)
   fChain->GetEntry(entry);
   int a13_c=0;    //counter through AMC13s
   int a_c=0;      //counter through AMCs
+//  int amcBID=0
   int g_c=0;      //counter through GEBs
   int v_c=0;      //counter through VFATs
 
-//BRS: Test write to tree outside of loop...:
-  amcID=1;
-  vfatID=5;
-  treeTranslator->Fill();
-
-//  v_amc13 = GEMEvents->amc13s();
-//  if (DEBUG) cout << "Get a vector of AMC13 "<< endl;
-//  /* LOOP THROUGH AMC13s */
-//  for(auto a13 = v_amc13.begin(); a13!=v_amc13.end(); a13++){
-//    if (DEBUG) cout << "Get AMC13 "<< endl;
-//    v_amc = a13->amcs();
-//    /* LOOP THROUGH AMCs */
-//    for(auto a=v_amc.begin(); a!=v_amc.end(); a++){
-//      if (DEBUG) cout << "Get AMC "<< endl;
-//      v_geb = a->gebs();
-//      if (DEBUG) cout << "Get GEB "<< endl;
-//      a_c=a->AMCnum();
-//      if (DEBUG) cout << "Get AMC H "<< endl;
-//      m_RunType = a->Rtype();
-//      if (m_RunType){
-//        m_Latency = a->Param1(); //BRS: NO IDEA
-//      }
-//      g_c=0;
-//      /* LOOP THROUGH GEBs */
-//      for(auto g=v_geb.begin(); g!=v_geb.end();g++){
-//        v_vfat = g->vfats();
-//        int gID = g->InputID();
-//        std::map<int,int> slot_map;
-//        /* LOOP THROUGH VFATs */
-//        for(auto v=v_vfat.begin(); v!=v_vfat.end();v++){
-//          int slot = v->Pos();
-////          if (slot>-1) {v_vfatH = v_gebH->vfatsH(slot);} else { continue;} //BRS what is this?
-//            //BRS: Fill branches here...
-////            amcID=a_c;
-//            amcID=1;
-////            branchAMCID->Fill();
-//            vfatID=slot;
-////            branchVfatID->Fill();
-//            treeTranslator->Fill();
-//            //
-//        } /* END VFAT LOOP */
-//      } /* END GEB LOOP */
-//      a_c++;
-//    } /* END AMC LOOP */
-//    a13_c++;
-//  } /* END AMC13 LOOP */
+  v_amc13 = GEMEvents->amc13s();
+  if (DEBUG) cout << "Get a vector of AMC13 "<< endl;
+  /* LOOP THROUGH AMC13s */
+  for(auto a13 = v_amc13.begin(); a13!=v_amc13.end(); a13++){
+    if (DEBUG) cout << "Get AMC13 "<< endl;
+    v_amc = a13->amcs();
+//    infoAMCVEC=v_amc.size();
+    /* LOOP THROUGH AMCs */
+    for(auto a=v_amc.begin(); a!=v_amc.end(); a++){
+      if (DEBUG) cout << "Get AMC "<< endl;
+      v_geb = a->gebs();
+//      infoGEBVEC=v_geb.size();
+      if (DEBUG) cout << "Get GEB "<< endl;
+      a_c=a->AMCnum();
+//      amcBID=a->BID();
+      if (DEBUG) cout << "Get AMC H "<< endl;
+      m_RunType = a->Rtype();
+      if (m_RunType){
+        m_Latency = a->Param1(); //BRS: NO IDEA
+      }
+      g_c=0;
+      /* LOOP THROUGH GEBs */
+      for(auto g=v_geb.begin(); g!=v_geb.end();g++){
+        v_vfat = g->vfats();
+        infoVFATVEC=v_vfat.size();
+        int gID = g->InputID();
+        std::map<int,int> slot_map;
+        /* LOOP THROUGH VFATs */
+        for(auto v=v_vfat.begin(); v!=v_vfat.end();v++){
+//          std::string fName = std::to_string(a)+"_"+std::to_string(v)+".root";
+//          TProofOutputFile* fProofFile = new TProofOutputFile(fName, "M");
+          int slot = v->Pos();
+//          if (slot>-1) {v_vfatH = v_gebH->vfatsH(slot);} else { continue;} //BRS what is this?
+            //BRS: Fill branches here...
+//            amcID=a_c;
+            amcID=a->AMCnum();
+            gebID=g->InputID();
+            vfatID=slot;
+//            vfatN=slot;
+//            vfatID=v.
+            treeTranslator->Fill();
+            //
+        } /* END VFAT LOOP */
+      } /* END GEB LOOP */
+      a_c++;
+    } /* END AMC LOOP */
+    a13_c++;
+  } /* END AMC13 LOOP */
   return kTRUE;
 }
 

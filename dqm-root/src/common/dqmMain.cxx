@@ -17,6 +17,7 @@ int main(int argc, char** argv)
   //gErrorIgnoreLevel = kError;
   gProofDebugMask = TProofDebug::kAll;
   gProofDebugLevel = 5;
+  gProofDebugLevel = 1;
   std::cout << "--==DQM Main==--" << endl;
   if (argc<2)
     {
@@ -51,8 +52,8 @@ int main(int argc, char** argv)
   TChain *ch = new TChain ("GEMtree","chain");
   ch->Add(ifilename.c_str());
 
-
-  TProof::Open("workers=4");
+  ofilename = "BRSTest.root";
+  TProof::Open("workers=4",0);
   gProof->AddInput(new TNamed("PROOF_OUTPUTFILE", ofilename.c_str()));
   gProof->GetInputList()->Print();
   ch->SetProof();;
@@ -73,9 +74,17 @@ int main(int argc, char** argv)
   gProof->AddIncludePath(path.c_str());
 
   gSystem->SetIncludePath("-I$BUILD_HOME/gem-light-dqm/dqm-root/include -I$BUILD_HOME/gem-light-dqm/dqm-root/src/common -I$BUILD_HOME/gem-light-dqm/gemtreewriter/include");
-
-  sel += "/gem-light-dqm/dqm-root/src/common/gemTreeReader.cxx++g";
+//  std::cout << "##Running gemTreeReader##" << endl;
+//  sel += "/gem-light-dqm/dqm-root/src/common/gemTreeReader.cxx++g";
+//  ch->Process(sel.c_str());
+//  std::cout << "##Finished gemTreeReader##" << endl;
+//  gSystem->SysLog(Error);
+  std::cout << "##Running gemTreeTranslator##" << endl;
+  sel += "/gem-light-dqm/dqm-root/src/common/gemTreeTranslator.cxx++g";
   ch->Process(sel.c_str());
+  std::cout << "##Finished gemTreeTranslator##" << endl;
+
+
   //TProofLite::Mgr("__lite__")->GetSessionLogs()->Display("*");
 
   if (DEBUG) std::cout << "DQM Complete." << endl;
